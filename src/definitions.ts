@@ -19,5 +19,5 @@ export interface Zip4JPlugin extends Plugin {
   addListener(
     eventName: 'extractAllProgressEvent' | 'renameFileProgressEvent' | 'removeFilesProgressEvent' | 'renameFileProgressEvent' | 'mergeSplitFilesProgressEvent' | 'setCommentProgressEvent' | 'addFilesProgressEvent' | 'addFolderProgressEvent' | 'createSplitZipFileProgressEvent',
     listenerFunc: (obj: { progress: number }) => void,
-  ): Promise<PluginListenerHandle> & PluginListenerHandle;
+  ): Promise<PluginListenerHandle>;
 }

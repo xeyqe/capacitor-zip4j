@@ -1,6 +1,6 @@
 {
   "name": "capacitor-zip4j",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "capacitor plugin for zip4j (android only)",
   "main": "dist/plugin.cjs.js",
   "module": "dist/esm/index.js",
@@ -27,6 +27,7 @@
     "plugin",
     "native"
   ],
+  "type": "module",
   "scripts": {
     "verify": "npm run verify:ios && npm run verify:android && npm run verify:web",
     "verify:ios": "cd ios && pod install && xcodebuild -workspace Plugin.xcworkspace -scheme Plugin -destination generic/platform=iOS && cd ..",

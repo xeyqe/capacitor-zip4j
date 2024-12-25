@@ -27,7 +27,7 @@ npx cap sync
 * [`addFiles(...)`](#addfiles)
 * [`addFolder(...)`](#addfolder)
 * [`createSplitZipFile(...)`](#createsplitzipfile)
-* [`addListener('extractAllProgressEvent' | 'renameFileProgressEvent' | 'removeFilesProgressEvent' | 'mergeSplitFilesProgressEvent' | 'setCommentProgressEvent' | 'addFilesProgressEvent' | 'addFolderProgressEvent' | 'createSplitZipFileProgressEvent', ...)`](#addlistenerextractallprogressevent--renamefileprogressevent--removefilesprogressevent--mergesplitfilesprogressevent--setcommentprogressevent--addfilesprogressevent--addfolderprogressevent--createsplitzipfileprogressevent)
+* [`addListener('extractAllProgressEvent' | 'renameFileProgressEvent' | 'removeFilesProgressEvent' | 'mergeSplitFilesProgressEvent' | 'setCommentProgressEvent' | 'addFilesProgressEvent' | 'addFolderProgressEvent' | 'createSplitZipFileProgressEvent', ...)`](#addlistenerextractallprogressevent--renamefileprogressevent--removefilesprogressevent--mergesplitfilesprogressevent--setcommentprogressevent--addfilesprogressevent--addfolderprogressevent--createsplitzipfileprogressevent-)
 * [Interfaces](#interfaces)
 
 </docgen-index>
@@ -248,7 +248,7 @@ createSplitZipFile(options: { zipFilePath: string; files: string[]; splitLength:
 ### addListener('extractAllProgressEvent' | 'renameFileProgressEvent' | 'removeFilesProgressEvent' | 'mergeSplitFilesProgressEvent' | 'setCommentProgressEvent' | 'addFilesProgressEvent' | 'addFolderProgressEvent' | 'createSplitZipFileProgressEvent', ...)
 
 ```typescript
-addListener(eventName: 'extractAllProgressEvent' | 'renameFileProgressEvent' | 'removeFilesProgressEvent' | 'renameFileProgressEvent' | 'mergeSplitFilesProgressEvent' | 'setCommentProgressEvent' | 'addFilesProgressEvent' | 'addFolderProgressEvent' | 'createSplitZipFileProgressEvent', listenerFunc: (obj: { progress: number; }) => void) => Promise<PluginListenerHandle> & PluginListenerHandle
+addListener(eventName: 'extractAllProgressEvent' | 'renameFileProgressEvent' | 'removeFilesProgressEvent' | 'renameFileProgressEvent' | 'mergeSplitFilesProgressEvent' | 'setCommentProgressEvent' | 'addFilesProgressEvent' | 'addFolderProgressEvent' | 'createSplitZipFileProgressEvent', listenerFunc: (obj: { progress: number; }) => void) => Promise<PluginListenerHandle>
 ```
 
 | Param              | Type                                                                                                                                                                                                                                                         |
@@ -256,7 +256,7 @@ addListener(eventName: 'extractAllProgressEvent' | 'renameFileProgressEvent' | '
 | **`eventName`**    | <code>'extractAllProgressEvent' \| 'renameFileProgressEvent' \| 'removeFilesProgressEvent' \| 'mergeSplitFilesProgressEvent' \| 'setCommentProgressEvent' \| 'addFilesProgressEvent' \| 'addFolderProgressEvent' \| 'createSplitZipFileProgressEvent'</code> |
 | **`listenerFunc`** | <code>(obj: { progress: number; }) =&gt; void</code>                                                                                                                                                                                                         |
 
-**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt; & <a href="#pluginlistenerhandle">PluginListenerHandle</a></code>
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
 
 --------------------
 

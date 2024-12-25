@@ -1,4 +1,4 @@
-import { WebPlugin } from '@capacitor/core';
+import { PluginListenerHandle, WebPlugin } from '@capacitor/core';
 
 import type { Zip4JPlugin } from './definitions';
 
@@ -59,4 +59,12 @@ export class Zip4JWeb extends WebPlugin implements Zip4JPlugin {
     console.log(options);
     return Promise.resolve({ message: 'not implemented' });
   }
+  addListener(
+      eventName: 'extractAllProgressEvent' | 'renameFileProgressEvent' | 'removeFilesProgressEvent' | 'renameFileProgressEvent' | 'mergeSplitFilesProgressEvent' | 'setCommentProgressEvent' | 'addFilesProgressEvent' | 'addFolderProgressEvent' | 'createSplitZipFileProgressEvent',
+      listenerFunc: (obj: { progress: number }) => void,
+    ): Promise<PluginListenerHandle> {
+      console.log(eventName);
+      console.log(listenerFunc);
+      return Promise.resolve(null as any);
+    }
 }
