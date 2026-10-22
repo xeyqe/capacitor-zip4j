@@ -1,0 +1,2 @@
+# Gradle generates Windows wrapper scripts with CRLF line endings.
+*.bat whitespace=cr-at-eol

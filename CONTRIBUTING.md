@@ -6,6 +6,8 @@ This guide provides instructions for contributing to this Capacitor plugin.
 
 ### Local Setup
 
+Use Node.js 22.13+ (22.x) or 24+, Java 21, and Android SDK 36. The Gradle wrapper supplies Gradle 8.14.3.
+
 1. Fork and clone the repo.
 1. Install the dependencies.
 
@@ -31,7 +33,7 @@ Then, Rollup will bundle the code into a single file at `dist/plugin.js`. This f
 
 #### `npm run verify`
 
-Build and validate the web and native projects.
+Build and validate the web and Android projects. Run `npm run verify:ios` separately on macOS with Xcode and CocoaPods; the iOS scaffold targets iOS 15 and does not implement ZIP operations.
 
 This is useful to run in CI to verify that the plugin builds for all platforms.
 
@@ -40,6 +42,8 @@ This is useful to run in CI to verify that the plugin builds for all platforms.
 Check formatting and code quality, autoformat/autofix if possible.
 
 This template is integrated with ESLint, Prettier, and SwiftLint. Using these tools is completely optional, but the [Capacitor Community](https://github.com/capacitor-community/) strives to have consistent code style and structure for easier cooperation.
+
+`npm run lint` checks TypeScript and source formatting. Run `npm run swiftlint -- lint` separately on macOS for Swift sources.
 
 ## Publishing
 

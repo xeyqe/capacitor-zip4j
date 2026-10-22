@@ -2,6 +2,8 @@
 
 capacitor plugin for zip4j (android only)
 
+Requires Capacitor 8 and Android API 24 or newer. Development uses Node.js 22.13+ (22.x) or 24+, Java 21, and Android SDK 36.
+
 ## Install
 
 ```bash

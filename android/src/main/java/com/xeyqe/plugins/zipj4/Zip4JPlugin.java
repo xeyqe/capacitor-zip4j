@@ -71,7 +71,7 @@ public class Zip4JPlugin extends Plugin {
         String zipFilePath = call.getString("zipFilePath");
         String destDirectory = call.getString("destDirectory");
         String password = call.getString("password", "");
-        submit(call, "extractAllProgressEvent", callback -> implementation.extractAll(zipFilePath, destDirectory, password, callback));
+        submit(call, "extractAllProgressEvent", (callback) -> implementation.extractAll(zipFilePath, destDirectory, password, callback));
     }
 
     @PluginMethod
@@ -81,7 +81,7 @@ public class Zip4JPlugin extends Plugin {
         String password = call.getString("password", "");
         String fileName = call.getString("fileName", "");
         String newFileName = call.getString("newFileName", "");
-        submit(call, "extractFileProgressEvent", callback ->
+        submit(call, "extractFileProgressEvent", (callback) ->
             implementation.extractFile(zipFilePath, destDirectory, password, fileName, newFileName, callback)
         );
     }
@@ -91,7 +91,7 @@ public class Zip4JPlugin extends Plugin {
         String zipFilePath = call.getString("zipFilePath");
         JSArray fileNames = call.getArray("fileNames");
         String password = call.getString("password", "");
-        submit(call, "removeFilesProgressEvent", callback -> implementation.removeFiles(zipFilePath, fileNames, password, callback));
+        submit(call, "removeFilesProgressEvent", (callback) -> implementation.removeFiles(zipFilePath, fileNames, password, callback));
     }
 
     @PluginMethod
@@ -100,7 +100,7 @@ public class Zip4JPlugin extends Plugin {
         String oldFile = call.getString("oldFile");
         String newFile = call.getString("newFile");
         String password = call.getString("password", "");
-        submit(call, "renameFileProgressEvent", callback -> implementation.renameFile(zipFilePath, oldFile, newFile, password, callback));
+        submit(call, "renameFileProgressEvent", (callback) -> implementation.renameFile(zipFilePath, oldFile, newFile, password, callback));
     }
 
     @PluginMethod
@@ -108,7 +108,7 @@ public class Zip4JPlugin extends Plugin {
         String zipFilePath = call.getString("zipFilePath");
         String newZipFilePath = call.getString("newZipFilePath");
         String password = call.getString("password", "");
-        submit(call, "mergeSplitFilesProgressEvent", callback ->
+        submit(call, "mergeSplitFilesProgressEvent", (callback) ->
             implementation.mergeSplitFiles(zipFilePath, newZipFilePath, password, callback)
         );
     }
@@ -117,20 +117,20 @@ public class Zip4JPlugin extends Plugin {
     public void getAllFileNames(PluginCall call) {
         String zipFilePath = call.getString("zipFilePath");
         String password = call.getString("password", "");
-        submit(call, "getAllFileNamesProgressEvent", callback -> implementation.getAllFileNames(zipFilePath, password, callback));
+        submit(call, "getAllFileNamesProgressEvent", (callback) -> implementation.getAllFileNames(zipFilePath, password, callback));
     }
 
     @PluginMethod
     public void isEncrypted(PluginCall call) {
         String zipFilePath = call.getString("zipFilePath");
-        submit(call, "isEncryptedProgressEvent", callback -> implementation.isEncrypted(zipFilePath, callback));
+        submit(call, "isEncryptedProgressEvent", (callback) -> implementation.isEncrypted(zipFilePath, callback));
     }
 
     @PluginMethod
     public void isSplitArchive(PluginCall call) {
         String zipFilePath = call.getString("zipFilePath");
         String password = call.getString("password");
-        submit(call, "isSplitArchiveProgressEvent", callback -> implementation.isSplitArchive(zipFilePath, password, callback));
+        submit(call, "isSplitArchiveProgressEvent", (callback) -> implementation.isSplitArchive(zipFilePath, password, callback));
     }
 
     @PluginMethod
@@ -138,14 +138,14 @@ public class Zip4JPlugin extends Plugin {
         String zipFilePath = call.getString("zipFilePath");
         String comment = call.getString("comment", "");
         String password = call.getString("password", "");
-        submit(call, "setCommentProgressEvent", callback -> implementation.setComment(zipFilePath, comment, password, callback));
+        submit(call, "setCommentProgressEvent", (callback) -> implementation.setComment(zipFilePath, comment, password, callback));
     }
 
     @PluginMethod
     public void getComment(PluginCall call) {
         String zipFilePath = call.getString("zipFilePath");
         String password = call.getString("password", "");
-        submit(call, "getCommentProgressEvent", callback -> implementation.getComment(zipFilePath, password, callback));
+        submit(call, "getCommentProgressEvent", (callback) -> implementation.getComment(zipFilePath, password, callback));
     }
 
     @PluginMethod
@@ -153,7 +153,7 @@ public class Zip4JPlugin extends Plugin {
         String zipFilePath = call.getString("zipFilePath");
         String fileName = call.getString("fileName");
         String password = call.getString("password", "");
-        submit(call, "containsFileProgressEvent", callback -> implementation.containsFile(zipFilePath, fileName, password, callback));
+        submit(call, "containsFileProgressEvent", (callback) -> implementation.containsFile(zipFilePath, fileName, password, callback));
     }
 
     @PluginMethod
@@ -161,7 +161,7 @@ public class Zip4JPlugin extends Plugin {
         String zipFilePath = call.getString("zipFilePath");
         JSArray files = call.getArray("files");
         String password = call.getString("password", "");
-        submit(call, "addFilesProgressEvent", callback -> implementation.addFiles(zipFilePath, files, password, callback));
+        submit(call, "addFilesProgressEvent", (callback) -> implementation.addFiles(zipFilePath, files, password, callback));
     }
 
     @PluginMethod
@@ -169,7 +169,7 @@ public class Zip4JPlugin extends Plugin {
         String zipFilePath = call.getString("zipFilePath");
         String folder = call.getString("folder");
         String password = call.getString("password", "");
-        submit(call, "addFolderProgressEvent", callback -> implementation.addFolder(zipFilePath, folder, password, callback));
+        submit(call, "addFolderProgressEvent", (callback) -> implementation.addFolder(zipFilePath, folder, password, callback));
     }
 
     @PluginMethod
@@ -182,7 +182,7 @@ public class Zip4JPlugin extends Plugin {
             call.reject("splitLength is required.");
             return;
         }
-        submit(call, "createSplitZipFileProgressEvent", callback ->
+        submit(call, "createSplitZipFileProgressEvent", (callback) ->
             implementation.createSplitZipFile(zipFilePath, files, splitLength, password, callback)
         );
     }

@@ -149,14 +149,14 @@ public class Zip4J {
     }
 
     public void extractAll(String path, String destination, String password, Zip4JCallback callback) {
-        execute(path, password, true, callback, archive -> {
+        execute(path, password, true, callback, (archive) -> {
             File directory = destination(destination);
             return runTask(archive, callback, path + " extracted to " + destination, () -> archive.extractAll(directory.getPath()));
         });
     }
 
     public void extractFile(String path, String destination, String password, String fileName, String newFileName, Zip4JCallback callback) {
-        execute(path, password, true, callback, archive -> {
+        execute(path, password, true, callback, (archive) -> {
             requireText(fileName, "fileName");
             File directory = destination(destination);
             return runTask(archive, callback, "File " + fileName + " extracted to " + destination + ".", () -> {
@@ -170,7 +170,7 @@ public class Zip4J {
     }
 
     public void removeFiles(String path, JSArray fileNames, String password, Zip4JCallback callback) {
-        execute(path, password, true, callback, archive -> {
+        execute(path, password, true, callback, (archive) -> {
             List<String> names = strings(fileNames, "fileNames");
             for (String name : names) {
                 if (archive.getFileHeader(name) == null) {
@@ -182,20 +182,21 @@ public class Zip4J {
     }
 
     public void renameFile(String path, String oldFile, String newFile, String password, Zip4JCallback callback) {
-        execute(path, password, true, callback, archive -> {
+        execute(path, password, true, callback, (archive) -> {
             requireText(oldFile, "oldFile");
             requireText(newFile, "newFile");
             FileHeader header = archive.getFileHeader(oldFile);
             if (header == null) {
                 throw new IOException("File " + oldFile + " is not in ZipFile.");
             }
-            return runTask(archive, callback, "File " + oldFile + " renamed to " + newFile + ".", () -> archive.renameFile(header, newFile)
+            return runTask(archive, callback, "File " + oldFile + " renamed to " + newFile + ".", () ->
+                archive.renameFile(header, newFile)
             );
         });
     }
 
     public void mergeSplitFiles(String path, String newPath, String password, Zip4JCallback callback) {
-        execute(path, password, true, callback, archive -> {
+        execute(path, password, true, callback, (archive) -> {
             File output = toFile(newPath);
             if (output.exists()) {
                 throw new IOException("File " + newPath + " already exists!");
@@ -205,7 +206,7 @@ public class Zip4J {
     }
 
     public void getAllFileNames(String path, String password, Zip4JCallback callback) {
-        execute(path, password, true, callback, archive -> {
+        execute(path, password, true, callback, (archive) -> {
             JSArray names = new JSArray();
             for (FileHeader header : archive.getFileHeaders()) {
                 names.put(header.getFileName());
@@ -215,15 +216,15 @@ public class Zip4J {
     }
 
     public void isEncrypted(String path, Zip4JCallback callback) {
-        execute(path, null, true, callback, archive -> new JSObject().put("isEncrypted", archive.isEncrypted()));
+        execute(path, null, true, callback, (archive) -> new JSObject().put("isEncrypted", archive.isEncrypted()));
     }
 
     public void isSplitArchive(String path, String password, Zip4JCallback callback) {
-        execute(path, password, true, callback, archive -> new JSObject().put("isSplitArchive", archive.isSplitArchive()));
+        execute(path, password, true, callback, (archive) -> new JSObject().put("isSplitArchive", archive.isSplitArchive()));
     }
 
     public void setComment(String path, String comment, String password, Zip4JCallback callback) {
-        execute(path, password, true, callback, archive ->
+        execute(path, password, true, callback, (archive) ->
             runTask(archive, callback, "Comment " + (comment == null ? "" : comment) + " set.", () ->
                 archive.setComment(comment == null ? "" : comment)
             )
@@ -231,7 +232,7 @@ public class Zip4J {
     }
 
     public void getComment(String path, String password, Zip4JCallback callback) {
-        execute(path, password, true, callback, archive -> {
+        execute(path, password, true, callback, (archive) -> {
             String comment = archive.getComment();
             return new JSObject().put("comment", comment == null ? "" : comment);
         });
@@ -246,7 +247,7 @@ public class Zip4J {
     }
 
     public void containsFile(String path, String fileName, String password, Zip4JCallback callback) {
-        execute(path, password, true, callback, archive ->
+        execute(path, password, true, callback, (archive) ->
             new JSObject().put("contains", archive.getFileHeader(requireText(fileName, "fileName")) != null)
         );
     }
@@ -260,14 +261,14 @@ public class Zip4J {
     }
 
     public void addFiles(String path, JSArray files, String password, Zip4JCallback callback) {
-        execute(path, password, false, callback, archive -> {
+        execute(path, password, false, callback, (archive) -> {
             List<File> sources = sourceFiles(files);
             return runTask(archive, callback, "Files added to " + path, () -> archive.addFiles(sources, parameters(password)));
         });
     }
 
     public void addFolder(String path, String folder, String password, Zip4JCallback callback) {
-        execute(path, password, false, callback, archive -> {
+        execute(path, password, false, callback, (archive) -> {
             File source = toFile(folder);
             if (!source.isDirectory()) {
                 throw new IOException("Source is not a directory: " + folder);
@@ -277,7 +278,7 @@ public class Zip4J {
     }
 
     public void createSplitZipFile(String path, JSArray files, long splitLength, String password, Zip4JCallback callback) {
-        execute(path, password, false, callback, archive -> {
+        execute(path, password, false, callback, (archive) -> {
             if (splitLength < 65536) {
                 throw new IllegalArgumentException("splitLength must be at least 65536 bytes.");
             }
