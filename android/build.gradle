@@ -54,6 +54,8 @@ dependencies {
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation 'net.lingala.zip4j:zip4j:2.11.5'
     testImplementation "junit:junit:$junitVersion"
+    // Use functional JSON classes for local tests of Capacitor result objects.
+    testImplementation 'org.json:json:20240303'
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
 }

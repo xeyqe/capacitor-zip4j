@@ -2,9 +2,15 @@ package com.xeyqe.plugins.zipj4;
 
 import com.getcapacitor.JSObject;
 
+/** Receives progress followed by exactly one completion or error on the operation's worker thread. */
 public interface Zip4JCallback {
-    void onDone(String message);
-    void onDone(JSObject obj);
+    default void onDone(String message) {
+        onDone(new JSObject().put("message", message));
+    }
+
+    void onDone(JSObject result);
+
     void onError(String message);
-    void onProgress(int percents);
+
+    default void onProgress(int percent) {}
 }

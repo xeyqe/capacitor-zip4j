@@ -1,481 +1,290 @@
 package com.xeyqe.plugins.zipj4;
 
-import android.util.Log;
-
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
-
-import net.lingala.zip4j.ZipFile;
-import net.lingala.zip4j.exception.ZipException;
-import net.lingala.zip4j.model.FileHeader;
-import net.lingala.zip4j.model.ZipParameters;
-import net.lingala.zip4j.progress.ProgressMonitor;
-
-import org.json.JSONException;
-
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import net.lingala.zip4j.ZipFile;
+import net.lingala.zip4j.model.FileHeader;
+import net.lingala.zip4j.model.ZipParameters;
+import net.lingala.zip4j.model.enums.EncryptionMethod;
+import net.lingala.zip4j.progress.ProgressMonitor;
+import org.json.JSONException;
 
+/** Archive operations run on the calling thread; the plugin supplies a background worker. */
 public class Zip4J {
 
-    private String getEditedPath(String path) {
-        if (path.contains("file://")) {
-            return path.replace("file://", "");
-        }
-        return path;
-    }
-    public void extractAll(String zipFilePath, String destDirectory, final String password, Zip4JCallback callback) {
-        zipFilePath = getEditedPath(zipFilePath);
-        destDirectory = getEditedPath(destDirectory);
-
-        if (!isValid(zipFilePath)) {
-            callback.onError("ZipFile is not valid!");
-            return;
-        }
-
-        File destDir = new File(destDirectory);
-        if (!destDir.exists()) {
-            Log.i("myzip4j", "creating folder: " + destDirectory);
-            if (!destDir.mkdirs()) {
-                callback.onError("Unable to create directory " + destDir + "!");
-                return;
-            }
-        }
-
-        ZipFile zipFile;
-        zipFile = new ZipFile(zipFilePath);
-        zipFile.setCharset(StandardCharsets.UTF_8);
-
-        try {
-            if (password.length() > 0 && zipFile.isEncrypted()) {
-                Log.i("myzip4j", "setting password " + password);
-                zipFile.setPassword(password.toCharArray());
-            }
-        } catch (ZipException e) {
-            callback.onError(e.getLocalizedMessage());
-            return;
-        }
-
-        ProgressMonitor progressMonitor = zipFile.getProgressMonitor();
-        zipFile.setRunInThread(true);
-        try {
-            zipFile.extractAll(destDirectory);
-        } catch (ZipException e) {
-            callback.onError(e.getLocalizedMessage());
-        }
-        takeCareOfProgressListener(progressMonitor, zipFile, zipFilePath + " extracted to " + destDirectory, callback);
+    private interface ArchiveOperation {
+        JSObject run(ZipFile archive) throws IOException, JSONException;
     }
 
-    private void takeCareOfProgressListener(ProgressMonitor progressMonitor, ZipFile zipFile, String doneMessage, Zip4JCallback callback) {
-        int percentsDone = 0;
-        while (!progressMonitor.getState().equals(ProgressMonitor.State.READY)) {
-            int percents = progressMonitor.getPercentDone();
-            if (percentsDone != percents) {
-                percentsDone = percents;
-                callback.onProgress(percents);
+    private interface ArchiveTask {
+        void run() throws IOException;
+    }
+
+    private static String requireText(String value, String name) {
+        if (value == null || value.trim().isEmpty()) {
+            throw new IllegalArgumentException(name + " must not be empty.");
+        }
+        return value;
+    }
+
+    private static File toFile(String path) {
+        requireText(path, "Path");
+        if (path.startsWith("file:")) {
+            return new File(URI.create(path));
+        }
+        if (path.contains("://")) {
+            throw new IllegalArgumentException("Only local paths and file URIs are supported.");
+        }
+        return new File(path);
+    }
+
+    private static ZipFile openArchive(String path, String password) {
+        ZipFile archive = new ZipFile(toFile(path));
+        archive.setCharset(StandardCharsets.UTF_8);
+        if (password != null && !password.isEmpty()) {
+            archive.setPassword(password.toCharArray());
+        }
+        return archive;
+    }
+
+    private void execute(String path, String password, boolean mustExist, Zip4JCallback callback, ArchiveOperation operation) {
+        JSObject result;
+        try (ZipFile archive = openArchive(path, password)) {
+            if (mustExist && !archive.isValidZipFile()) {
+                throw new IOException("ZipFile is not valid: " + path);
+            }
+            result = operation.run(archive);
+        } catch (IOException | JSONException | IllegalArgumentException e) {
+            String message = e.getMessage();
+            callback.onError(message == null || message.isEmpty() ? "Archive operation failed." : message);
+            return;
+        }
+        // Resolve only after resources have been closed successfully.
+        callback.onDone(result);
+    }
+
+    private JSObject runTask(ZipFile archive, Zip4JCallback callback, String message, ArchiveTask task) throws IOException {
+        archive.setRunInThread(true);
+        task.run();
+        ProgressMonitor monitor = archive.getProgressMonitor();
+        int previous = -1;
+        boolean interrupted = false;
+        while (monitor.getState() == ProgressMonitor.State.BUSY) {
+            int progress = Math.min(99, Math.max(0, monitor.getPercentDone()));
+            if (!interrupted && progress != previous) {
+                previous = progress;
+                callback.onProgress(progress);
             }
             try {
                 Thread.sleep(100);
             } catch (InterruptedException e) {
-                callback.onError(e.getLocalizedMessage());
-                throw new RuntimeException(e);
+                monitor.setCancelAllTasks(true);
+                interrupted = true;
+                // Wait for the archive task to stop before closing its resources.
             }
         }
-
-        if (progressMonitor.getResult().equals(ProgressMonitor.Result.SUCCESS)) {
-            try {
-                zipFile.close();
-            } catch (IOException e) {
-                callback.onError(e.getLocalizedMessage());
-                return;
-            }
-            callback.onProgress(100);
-            callback.onDone(doneMessage);
-        } else if (progressMonitor.getResult().equals(ProgressMonitor.Result.ERROR)) {
-            callback.onError(progressMonitor.getException().getMessage());
-        } else if (progressMonitor.getResult().equals(ProgressMonitor.Result.CANCELLED)) {
-            callback.onError("Task cancelled");
+        if (interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Archive operation interrupted.");
         }
+        if (monitor.getResult() == ProgressMonitor.Result.CANCELLED) {
+            throw new IOException("Task cancelled.");
+        }
+        if (monitor.getResult() != ProgressMonitor.Result.SUCCESS) {
+            Exception error = monitor.getException();
+            throw new IOException(error == null ? "Archive operation failed." : error.getMessage(), error);
+        }
+        callback.onProgress(100);
+        return new JSObject().put("message", message);
     }
 
-    public void extractFile(String zipFilePath, String destDirectory, final String password, String fileName, String newFileName, Zip4JCallback callback) {
-        zipFilePath = getEditedPath(zipFilePath);
-        destDirectory = getEditedPath(destDirectory);
-        if (!isValid(zipFilePath)) {
-            callback.onError("ZipFile is not valid!");
-            return;
+    private static File destination(String path) throws IOException {
+        File directory = toFile(path);
+        if (!directory.isDirectory() && !directory.mkdirs() && !directory.isDirectory()) {
+            throw new IOException("Unable to create directory " + directory + ".");
         }
-        ZipFile zipFile = new ZipFile(zipFilePath);
-        ProgressMonitor progressMonitor = zipFile.getProgressMonitor();
-        if (password != null && !password.equals("")) {
-            zipFile.setPassword(password.toCharArray());
-        }
-        zipFile.setRunInThread(true);
-        try {
-            if (newFileName != null && !newFileName.equals("")) {
-                zipFile.extractFile(fileName, destDirectory, newFileName);
-            } else {
-                zipFile.extractFile(fileName, destDirectory);
-            }
-        } catch (ZipException e) {
-            callback.onError(e.getLocalizedMessage());
-            return;
-        }
-        takeCareOfProgressListener(progressMonitor, zipFile, "File " + fileName + " extracted to " + destDirectory + ".", callback);
+        return directory;
     }
 
-    public void removeFiles(String zipFilePath, final JSArray fileNames, final String password, Zip4JCallback callback) {
-        zipFilePath = getEditedPath(zipFilePath);
-        if (!isValid(zipFilePath)) {
-            callback.onError("ZipFile " + zipFilePath + " is not valid!");
-            return;
+    private static List<String> strings(JSArray values, String name) throws JSONException {
+        if (values == null || values.length() == 0) {
+            throw new IllegalArgumentException(name + " must not be empty.");
         }
-        ZipFile zipFile = new ZipFile(zipFilePath);
-        List<String> filesToRemove = List.of();
-        if (fileNames != null && fileNames.length() > 0) {
-            for (int i = 0; i < fileNames.length(); i++) {
-                try {
-                    String file = fileNames.getString(i);
-                    if (!containsFile(zipFilePath, password, file)) {
-                        callback.onError("ZipFile doesn't include " + file + "!");
-                        return;
-                    }
-                    filesToRemove.add(file);
-                } catch (JSONException e) {
-                    callback.onError(e.getLocalizedMessage());
-                    return;
+        List<String> result = new ArrayList<>();
+        for (int i = 0; i < values.length(); i++) {
+            Object value = values.get(i);
+            if (!(value instanceof String)) {
+                throw new IllegalArgumentException(name + " must contain only strings.");
+            }
+            result.add(requireText((String) value, name + "[" + i + "]"));
+        }
+        return result;
+    }
+
+    private static List<File> sourceFiles(JSArray values) throws JSONException, IOException {
+        List<File> result = new ArrayList<>();
+        for (String path : strings(values, "files")) {
+            File file = toFile(path);
+            if (!file.isFile()) {
+                throw new IOException("Source is not a file: " + path);
+            }
+            result.add(file);
+        }
+        return result;
+    }
+
+    private static ZipParameters parameters(String password) {
+        ZipParameters parameters = new ZipParameters();
+        if (password != null && !password.isEmpty()) {
+            parameters.setEncryptFiles(true);
+            parameters.setEncryptionMethod(EncryptionMethod.AES);
+        }
+        return parameters;
+    }
+
+    public void extractAll(String path, String destination, String password, Zip4JCallback callback) {
+        execute(path, password, true, callback, archive -> {
+            File directory = destination(destination);
+            return runTask(archive, callback, path + " extracted to " + destination, () -> archive.extractAll(directory.getPath()));
+        });
+    }
+
+    public void extractFile(String path, String destination, String password, String fileName, String newFileName, Zip4JCallback callback) {
+        execute(path, password, true, callback, archive -> {
+            requireText(fileName, "fileName");
+            File directory = destination(destination);
+            return runTask(archive, callback, "File " + fileName + " extracted to " + destination + ".", () -> {
+                if (newFileName == null || newFileName.isEmpty()) {
+                    archive.extractFile(fileName, directory.getPath());
+                } else {
+                    archive.extractFile(fileName, directory.getPath(), newFileName);
+                }
+            });
+        });
+    }
+
+    public void removeFiles(String path, JSArray fileNames, String password, Zip4JCallback callback) {
+        execute(path, password, true, callback, archive -> {
+            List<String> names = strings(fileNames, "fileNames");
+            for (String name : names) {
+                if (archive.getFileHeader(name) == null) {
+                    throw new IOException("ZipFile doesn't include " + name + "!");
                 }
             }
-        } else {
-            callback.onError("Nothing to add.");
-            return;
-        }
-        ProgressMonitor progressMonitor = zipFile.getProgressMonitor();
-        if (password != null && !password.equals("")) {
-            zipFile.setPassword(password.toCharArray());
-        }
-        try {
-            zipFile.removeFiles(filesToRemove);
-        } catch (ZipException e) {
-            callback.onError(e.getLocalizedMessage());
-        }
-        takeCareOfProgressListener(progressMonitor, zipFile, "Files removed.", callback);
+            return runTask(archive, callback, "Files removed.", () -> archive.removeFiles(names));
+        });
     }
 
-    public void renameFile(String zipFilePath, final String oldFile, final String newFile, final String password, Zip4JCallback callback) {
-        zipFilePath = getEditedPath(zipFilePath);
-        if (!isValid(zipFilePath)) {
-            callback.onError("ZipFile " + zipFilePath + " is not valid!");
-            return;
-        }
-        ZipFile zipFile = new ZipFile(zipFilePath);
-        if (password != null && !password.equals("")) {
-            zipFile.setPassword(password.toCharArray());
-        }
-        ProgressMonitor progressMonitor = zipFile.getProgressMonitor();
-
-        FileHeader fileHeader;
-        try {
-            fileHeader= zipFile.getFileHeader(oldFile);
-        } catch (ZipException e) {
-            throw new RuntimeException(e);
-        }
-        if (fileHeader == null) {
-            callback.onError("File " + oldFile + " is not in ZipFile.");
-            return;
-        }
-        try {
-            zipFile.renameFile(fileHeader, newFile);
-        } catch (ZipException e) {
-            callback.onError(e.getLocalizedMessage());
-            return;
-        }
-        this.takeCareOfProgressListener(progressMonitor, zipFile, "File " + oldFile + " renamed to " + newFile + ".", callback);
-    }
-
-    public void mergeSplitFiles(String zipFilePath, String newZipFilePath, final String password, Zip4JCallback callback) {
-        zipFilePath = getEditedPath(zipFilePath);
-        newZipFilePath = getEditedPath(newZipFilePath);
-        if (!isValid(zipFilePath)) {
-            callback.onError("ZipFile is not valid.");
-            return;
-        }
-        ZipFile zipFile = new ZipFile(zipFilePath);
-        ProgressMonitor progressMonitor = zipFile.getProgressMonitor();
-        if (password != null && !password.equals("")) {
-            zipFile.setPassword(password.toCharArray());
-        }
-        File newFile = new File(newZipFilePath);
-        if (newFile.exists()) {
-            callback.onError("File " + newZipFilePath + " already exits!");
-            return;
-        }
-        try {
-            zipFile.mergeSplitFiles(new File(newZipFilePath));
-        } catch (ZipException e) {
-            callback.onError(e.getLocalizedMessage());
-            return;
-        }
-        takeCareOfProgressListener(progressMonitor, zipFile, "Split files merged.", callback);
-    }
-
-    public void getAllFileNames(String zipFilePath, String password, Zip4JCallback callback) {
-        zipFilePath = getEditedPath(zipFilePath);
-        if (!isValid(zipFilePath)) {
-            callback.onError("ZipFile is not valid!");
-            return;
-        }
-        List<FileHeader> fileHeaders;
-        ZipFile zipFile = new ZipFile(zipFilePath);
-        if (password != null && !password.equals("")) {
-            zipFile.setPassword(password.toCharArray());
-        }
-        try {
-            fileHeaders = zipFile.getFileHeaders();
-        } catch (ZipException e) {
-            callback.onError(e.getLocalizedMessage());
-            return;
-        }
-        ArrayList<String> files = new ArrayList<>();
-        for (FileHeader fileHeader : fileHeaders) {
-            files.add(fileHeader.getFileName());
-        }
-        JSArray fileNames = JSArray.from(files.toArray());
-        callback.onDone(new JSObject().put("names", fileNames));
-    }
-
-    public void isEncrypted(String zipFilePath, Zip4JCallback callback) {
-        zipFilePath = getEditedPath(zipFilePath);
-        if (!isValid(zipFilePath)) {
-            callback.onError("ZipFile is not valid!");
-            return;
-        }
-        try {
-            boolean isEncrypted = new ZipFile(zipFilePath).isEncrypted();
-            callback.onDone(new JSObject().put("isEncrypted", isEncrypted));
-        } catch (ZipException e) {
-            callback.onError(e.getLocalizedMessage());
-        }
-    }
-
-    public void isSplitArchive(String zipFilePath, final String password, Zip4JCallback callback) {
-        zipFilePath = getEditedPath(zipFilePath);
-        if (!isValid(zipFilePath)) {
-            callback.onError("ZipFile is not valid!");
-            return;
-        }
-        ZipFile zipFile = new ZipFile(zipFilePath);
-        if (password != null && !password.equals("")) {
-            zipFile.setPassword(password.toCharArray());
-        }
-        try {
-            boolean isSplitArchive = zipFile.isSplitArchive();
-            callback.onDone(new JSObject().put("isSplitArchive", isSplitArchive));
-        } catch (ZipException e) {
-            callback.onError(e.getLocalizedMessage());
-        }
-    }
-
-    public void setComment(String zipFilePath, String comment, final String password, Zip4JCallback callback) {
-        if (!isValid(zipFilePath)) {
-            callback.onError("ZipFile is not valid.");
-            return;
-        }
-        if (comment == null) comment = "";
-        zipFilePath = getEditedPath(zipFilePath);
-        ZipFile zipFile = new ZipFile(zipFilePath);
-        if (password != null && !password.equals("")) {
-            zipFile.setPassword(password.toCharArray());
-        }
-        ProgressMonitor progressMonitor = zipFile.getProgressMonitor();
-        try {
-            zipFile.setComment(comment);
-        } catch (ZipException e) {
-            callback.onError(e.getLocalizedMessage());
-        }
-        takeCareOfProgressListener(progressMonitor, zipFile, "Comment " + comment + " set.", callback);
-    }
-
-    public void getComment(String zipFilePath, final String password, Zip4JCallback callback) {
-        zipFilePath = getEditedPath(zipFilePath);
-        ZipFile zipFile = new ZipFile(zipFilePath);
-        if (password != null && !password.equals("")) {
-            zipFile.setPassword(password.toCharArray());
-        }
-        try {
-            String comment = zipFile.getComment();
-            callback.onDone(new JSObject().put("comment", comment));
-        } catch (ZipException e) {
-            callback.onError(e.getLocalizedMessage());
-        }
-    }
-
-    public boolean isValid(String zipFilePath) {
-        zipFilePath = getEditedPath(zipFilePath);
-        try {
-            new File(zipFilePath);
-        } catch (NullPointerException e) {
-            return false;
-        }
-        return new ZipFile(zipFilePath).isValidZipFile();
-    }
-
-    public void containsFile(String zipFilePath, String fileName, final String password, Zip4JCallback callback) {
-        zipFilePath = getEditedPath(zipFilePath);
-        if (!isValid(zipFilePath)) {
-            callback.onError("ZipFile is not valid!");
-            return;
-        }
-        ZipFile zipFile = new ZipFile(zipFilePath);
-        if (password != null && !password.equals("")) {
-            zipFile.setPassword(password.toCharArray());
-        }
-        FileHeader fileHeader;
-        try {
-            fileHeader = zipFile.getFileHeader(fileName);
-            callback.onDone(new JSObject().put("contains", fileHeader != null));
-        } catch (ZipException e) {
-            callback.onError(e.getLocalizedMessage());
-        }
-
-    }
-
-    public boolean containsFile(String zipFilePath, final String password, String fileName) {
-        zipFilePath = getEditedPath(zipFilePath);
-        if (!isValid(zipFilePath)) {
-            return false;
-        }
-        ZipFile zipFile = new ZipFile(zipFilePath);
-        if (password != null && !password.equals("")) {
-            zipFile.setPassword(password.toCharArray());
-        }
-        FileHeader fileHeader;
-        try {
-            fileHeader = zipFile.getFileHeader(fileName);
-        } catch (ZipException e) {
-            return false;
-        }
-
-        return fileHeader != null;
-    }
-
-    public void addFiles(final String zipFilePath, final JSArray files, final String password, Zip4JCallback callback) {
-        List<File> filesToAdd = List.of();
-        if (files != null && files.length() > 0) {
-            for (int i = 0; i < files.length(); i++) {
-                try {
-                    String path = files.getString(i);
-                    File file = new File(path);
-                    if (!file.exists()) {
-                        callback.onError("File " + path + " doesn't exist.");
-                        return;
-                    } else if (file.isDirectory()) {
-                        callback.onError("File " + path + " is not a file, but a directory.");
-                        return;
-                    }
-                    filesToAdd.add(file);
-                } catch (JSONException e) {
-                    callback.onError(e.getLocalizedMessage());
-                    return;
-                }
+    public void renameFile(String path, String oldFile, String newFile, String password, Zip4JCallback callback) {
+        execute(path, password, true, callback, archive -> {
+            requireText(oldFile, "oldFile");
+            requireText(newFile, "newFile");
+            FileHeader header = archive.getFileHeader(oldFile);
+            if (header == null) {
+                throw new IOException("File " + oldFile + " is not in ZipFile.");
             }
-        } else {
-            callback.onError("Nothing to add.");
-            return;
-        }
-        ZipFile zipFile = new ZipFile(zipFilePath);
-        ProgressMonitor progressMonitor = zipFile.getProgressMonitor();
-        if (password != null && password.length() > 0) {
-            zipFile.setPassword(password.toCharArray());
-        }
-        zipFile.setCharset(StandardCharsets.UTF_8);
-        zipFile.setRunInThread(true);
-        try {
-            zipFile.addFiles(filesToAdd);
-        } catch (ZipException e) {
-            callback.onError(e.getLocalizedMessage());
-            return;
-        }
-        this.takeCareOfProgressListener(progressMonitor, zipFile, "Files added to " + zipFilePath, callback);
+            return runTask(archive, callback, "File " + oldFile + " renamed to " + newFile + ".", () -> archive.renameFile(header, newFile)
+            );
+        });
     }
 
-    public void addFolder(final String zipFilePath, final String folder, final String password, Zip4JCallback callback) {
-        if (folder == null || folder.equals("")) {
-            callback.onError("Nothing to add.");
-            return;
-        }
-        File file = new File(folder);
-        if (!file.exists()) {
-            callback.onError("Folder " + folder + " doesn't exist.");
-            return;
-        } else if (file.isFile()) {
-            callback.onError("Folder " + folder + " is not a directory, but a file.");
-            return;
-        }
-        ZipFile zipFile = new ZipFile(zipFilePath);
-        ProgressMonitor progressMonitor;
-        if (password.length() > 0) {
-            zipFile.setPassword(password.toCharArray());
-        }
-        zipFile.setCharset(StandardCharsets.UTF_8);
-
-        progressMonitor = zipFile.getProgressMonitor();
-        zipFile.setRunInThread(true);
-        try {
-            zipFile.addFolder(file);
-        } catch (ZipException e) {
-            callback.onError(e.getLocalizedMessage());
-            return;
-        }
-        this.takeCareOfProgressListener(progressMonitor, zipFile, "Files added to " + zipFilePath + ".", callback);
-    }
-
-    public void createSplitZipFile(String zipFilePath, final JSArray files, final long splitLength, final String password, Zip4JCallback callback) {
-        zipFilePath = getEditedPath(zipFilePath);
-        if (!isValid(zipFilePath)) {
-            callback.onError("ZipFile is not valid.");
-            return;
-        }
-        List<File> filesToAdd = List.of();
-        if (files != null && files.length() > 0) {
-            for (int i = 0; i < files.length(); i++) {
-                try {
-                    String path = files.getString(i);
-                    File file = new File(path);
-                    if (!file.exists()) {
-                        callback.onError("File " + path + " doesn't exist.");
-                        return;
-                    } else if (file.isDirectory()) {
-                        callback.onError("File " + path + " is not a file, but a directory.");
-                        return;
-                    }
-                    filesToAdd.add(file);
-                } catch (JSONException e) {
-                    callback.onError(e.getLocalizedMessage());
-                    return;
-                }
+    public void mergeSplitFiles(String path, String newPath, String password, Zip4JCallback callback) {
+        execute(path, password, true, callback, archive -> {
+            File output = toFile(newPath);
+            if (output.exists()) {
+                throw new IOException("File " + newPath + " already exists!");
             }
-        } else {
-            callback.onError("Nothing to add.");
-            return;
-        }
-
-        ZipFile zipFile = new ZipFile(zipFilePath);
-        if (password != null && !zipFilePath.equals("")) {
-            zipFile.setPassword(password.toCharArray());
-        }
-        ProgressMonitor progressMonitor = zipFile.getProgressMonitor();
-        try {
-            zipFile.createSplitZipFile(filesToAdd, new ZipParameters(), true, splitLength);
-        } catch (ZipException e) {
-            callback.onError(e.getLocalizedMessage());
-            return;
-        }
-        takeCareOfProgressListener(progressMonitor, zipFile, "SplitZipFile created.", callback);
+            return runTask(archive, callback, "Split files merged.", () -> archive.mergeSplitFiles(output));
+        });
     }
 
+    public void getAllFileNames(String path, String password, Zip4JCallback callback) {
+        execute(path, password, true, callback, archive -> {
+            JSArray names = new JSArray();
+            for (FileHeader header : archive.getFileHeaders()) {
+                names.put(header.getFileName());
+            }
+            return new JSObject().put("names", names);
+        });
+    }
+
+    public void isEncrypted(String path, Zip4JCallback callback) {
+        execute(path, null, true, callback, archive -> new JSObject().put("isEncrypted", archive.isEncrypted()));
+    }
+
+    public void isSplitArchive(String path, String password, Zip4JCallback callback) {
+        execute(path, password, true, callback, archive -> new JSObject().put("isSplitArchive", archive.isSplitArchive()));
+    }
+
+    public void setComment(String path, String comment, String password, Zip4JCallback callback) {
+        execute(path, password, true, callback, archive ->
+            runTask(archive, callback, "Comment " + (comment == null ? "" : comment) + " set.", () ->
+                archive.setComment(comment == null ? "" : comment)
+            )
+        );
+    }
+
+    public void getComment(String path, String password, Zip4JCallback callback) {
+        execute(path, password, true, callback, archive -> {
+            String comment = archive.getComment();
+            return new JSObject().put("comment", comment == null ? "" : comment);
+        });
+    }
+
+    public boolean isValid(String path) {
+        try (ZipFile archive = openArchive(path, null)) {
+            return archive.isValidZipFile();
+        } catch (IOException | IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    public void containsFile(String path, String fileName, String password, Zip4JCallback callback) {
+        execute(path, password, true, callback, archive ->
+            new JSObject().put("contains", archive.getFileHeader(requireText(fileName, "fileName")) != null)
+        );
+    }
+
+    public boolean containsFile(String path, String password, String fileName) {
+        try (ZipFile archive = openArchive(path, password)) {
+            return archive.isValidZipFile() && archive.getFileHeader(requireText(fileName, "fileName")) != null;
+        } catch (IOException | IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    public void addFiles(String path, JSArray files, String password, Zip4JCallback callback) {
+        execute(path, password, false, callback, archive -> {
+            List<File> sources = sourceFiles(files);
+            return runTask(archive, callback, "Files added to " + path, () -> archive.addFiles(sources, parameters(password)));
+        });
+    }
+
+    public void addFolder(String path, String folder, String password, Zip4JCallback callback) {
+        execute(path, password, false, callback, archive -> {
+            File source = toFile(folder);
+            if (!source.isDirectory()) {
+                throw new IOException("Source is not a directory: " + folder);
+            }
+            return runTask(archive, callback, "Files added to " + path + ".", () -> archive.addFolder(source, parameters(password)));
+        });
+    }
+
+    public void createSplitZipFile(String path, JSArray files, long splitLength, String password, Zip4JCallback callback) {
+        execute(path, password, false, callback, archive -> {
+            if (splitLength < 65536) {
+                throw new IllegalArgumentException("splitLength must be at least 65536 bytes.");
+            }
+            List<File> sources = sourceFiles(files);
+            return runTask(archive, callback, "SplitZipFile created.", () ->
+                archive.createSplitZipFile(sources, parameters(password), true, splitLength)
+            );
+        });
+    }
 }
-
