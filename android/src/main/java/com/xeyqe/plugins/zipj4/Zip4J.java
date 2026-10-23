@@ -36,7 +36,8 @@ public class Zip4J {
     private static File toFile(String path) {
         requireText(path, "Path");
         if (path.startsWith("file:")) {
-            return new File(URI.create(path));
+            // Capacitor file URIs can contain literal spaces. Preserve existing escapes.
+            return new File(URI.create(path.replace(" ", "%20")));
         }
         if (path.contains("://")) {
             throw new IllegalArgumentException("Only local paths and file URIs are supported.");

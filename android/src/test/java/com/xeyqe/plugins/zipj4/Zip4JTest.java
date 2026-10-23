@@ -100,7 +100,7 @@ public class Zip4JTest {
 
     @Test
     public void supportsEncodedFileUrisForInputsOutputsAndComments() throws Exception {
-        File source = source("sp ace ü.txt");
+        File source = source("sp ace ü+%20.txt");
         File archive = new File(temporary.getRoot(), "my archive.zip");
         Result add = new Result();
         implementation.addFiles(archive.toURI().toString(), array(source.toURI().toString()), "", add);
@@ -115,6 +115,26 @@ public class Zip4JTest {
         File destination = new File(temporary.getRoot(), "output space");
         Result extract = new Result();
         implementation.extractAll(archive.toURI().toString(), destination.toURI().toString(), null, extract);
+        extract.succeeded();
+        assertArrayEquals(Files.readAllBytes(source.toPath()), Files.readAllBytes(new File(destination, source.getName()).toPath()));
+    }
+
+    @Test
+    public void extractsFileUrisWithLiteralSpacesAndAccents() throws Exception {
+        File source = source("chapter.txt");
+        File directory = temporary.newFolder("Lukášková, Markéta");
+        File archive = new File(directory, "Markéta Lukášková - Losos v kaluži.epub");
+        Result add = new Result();
+        implementation.addFiles(archive.getPath(), array(source.getPath()), null, add);
+        add.succeeded();
+        File destination = new File(temporary.getRoot(), "výstup knihy");
+        Result extract = new Result();
+        implementation.extractAll(
+            "file://" + temporary.getRoot().getPath() + "//" + directory.getName() + "/" + archive.getName(),
+            "file://" + destination.getPath(),
+            null,
+            extract
+        );
         extract.succeeded();
         assertArrayEquals(Files.readAllBytes(source.toPath()), Files.readAllBytes(new File(destination, source.getName()).toPath()));
     }
